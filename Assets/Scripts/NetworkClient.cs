@@ -119,6 +119,9 @@ public class NetworkClient : MonoBehaviour
                {
                     Debug.Log(suMsg.players[i].id + "  " + suMsg.players[i].cubPos);
                }
+                // server가 보내주는 모든 정보 받기, 현교 데이터만 받아와서 내 업데이트에 적용
+                UpdateOldClientsInfo(suMsg);
+
                 break;
 
             case Commands.INTERNAL_ID:
@@ -193,5 +196,23 @@ public class NetworkClient : MonoBehaviour
 
         // json string
         SendToServer(JsonUtility.ToJson(data));
+    }
+
+    public void UpdateOldClientsInfo(ServerUpdateMsg data)
+    {
+        for(int i = 0; i < data.players.Count; ++i)
+        {
+            if (listOfOldClients.ContainsKey(data.players[i].id))
+            {
+                // 현교 데이터 업데이트
+                listOfOldClients[data.players[i].id].transform.position = data.players[i].cubPos;
+            }
+
+            // 내 데이터는 배제
+            else
+            {
+                
+            }
+        }
     }
 }

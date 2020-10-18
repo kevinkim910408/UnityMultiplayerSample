@@ -190,6 +190,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: Player
       objectReference: {fileID: 0}
+    - target: {fileID: 5203388566105150711, guid: c762304d2be391d4580ddc5b1b0e7332,
+        type: 3}
+      propertyPath: moveSpeed
+      value: 10
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c762304d2be391d4580ddc5b1b0e7332, type: 3}
 --- !u!1 &705507993
@@ -330,6 +335,7 @@ MonoBehaviour:
   serverIP: 127.0.0.1
   serverPort: 12345
   clients: {fileID: 5783291345610750495, guid: e65ef4f2d1d130040b0e312b219c163c, type: 3}
+  transformPosition: {fileID: 849735898}
 --- !u!4 &849735898 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 767414997536654540, guid: c762304d2be391d4580ddc5b1b0e7332,
@@ -422,13 +428,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2129293999}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: 0.2588191, y: 0, z: 0, w: 0.9659258}
+  m_LocalPosition: {x: 0, y: 5.74, z: -4.51}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 849735898}
   m_RootOrder: 0
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 30, y: 0, z: 0}
 --- !u!81 &2129294001
 AudioListener:
   m_ObjectHideFlags: 0
