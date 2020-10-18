@@ -8,7 +8,10 @@ namespace NetworkMessages
         PLAYER_UPDATE,
         SERVER_UPDATE,
         HANDSHAKE,
-        PLAYER_INPUT
+        PLAYER_INPUT,
+        INTERNAL_ID,
+        OLD_CLIENTS_INFO,
+        NEW_CLIENTS_INFO,
     }
 
     [System.Serializable]
@@ -27,6 +30,7 @@ namespace NetworkMessages
     
     [System.Serializable]
     public class PlayerUpdateMsg:NetworkHeader{
+        // plater - id, color, pos
         public NetworkObjects.NetworkPlayer player;
         public PlayerUpdateMsg(){      // Constructor
             cmd = Commands.PLAYER_UPDATE;
