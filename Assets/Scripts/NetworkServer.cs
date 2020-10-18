@@ -28,33 +28,37 @@ public class NetworkServer : MonoBehaviour
         intervalTimeSendingAllPlayerInfo = 0.03f;
 
 
-        // Driver = Socket 같은거
+        // Driver -> like socket
         m_Driver = NetworkDriver.Create();
 
         // 어디에 연결할지, AnyIpv4--> 머신이 돌아가는 위치의 IP
+        // -> where to connect. AnyIpv4 is the location of machine's ip
         var endpoint = NetworkEndPoint.AnyIpv4;
 
         // Port setting
         endpoint.Port = serverPort;
 
-        // socket을 바인드
+        // Bind the socket
         if (m_Driver.Bind(endpoint) != 0)
             Debug.Log("Failed to bind to port " + serverPort);
 
-        //바인드가 성공하면 Listen()--> 서버가 클라의 연결을 받아들일 준비상태
+        //if bind is good, server is ready to accept clients' connections
         else
             m_Driver.Listen();
 
         //커넥션 - 서버가 클라들의 접속을 알수있게(관리함) 해주는 다리, NativeList--> List와 비슷
+        // -> m_Connections is like bridges that server knows which clients want to connect to the server. NativeList is a List
         m_Connections = new NativeList<NetworkConnection>(16, Allocator.Persistent);
     }
 
     void Update()
     {
         // ScheduleUpdate().Complete() 이것을 불러주면서, 다음 업데이트가 레디가 됬는지 알려줌, Complete()이게 되면 이제 우리 업데이트를 해도 된다라는 느낌
+        // -> If Complete(), we can update ours.
         m_Driver.ScheduleUpdate().Complete();
 
         // CleanUpConnections - Connection이 제대로 안만들어져 있거나 끊어진건 리스트에서 배제
+        // -> CleanUpConnections helps List to remove unconnected connections, or not completed connections(bridges)
         for (int i = 0; i < m_Connections.Length; i++)
         {
             if (!m_Connections[i].IsCreated)
@@ -66,6 +70,7 @@ public class NetworkServer : MonoBehaviour
         }
 
         // AcceptNewConnections - 여기서 c가 connection(연결다리), 클라를 받아줌
+        // - > c is accepting clients
         NetworkConnection c = m_Driver.Accept();
         while (c != default(NetworkConnection))
         {
@@ -81,23 +86,26 @@ public class NetworkServer : MonoBehaviour
         for (int i = 0; i < m_Connections.Length; i++)
         {
             // 커넥션들이 다 잘 되는지 체크
+            // -> check all the connections whether working or not
             Assert.IsTrue(m_Connections[i].IsCreated);
 
             // cmd - 이 메세지가 어떤 메세지인지 분별
+            // cmd(enum) helps server to know the next actions
             NetworkEvent.Type cmd;
 
             // PopEventForConnection - 커넥션(다리)에 어떤 메세지가 와있는지, out stream에 데이터가 담김
+            // PopEventForConnection - which messages are on the connections(bridges)
             cmd = m_Driver.PopEventForConnection(m_Connections[i], out stream);
 
-            // cmd가 empty가 아니면
+            // if cme is not empty == there are values
             while (cmd != NetworkEvent.Type.Empty)
             {
-                //데이터
+                //data
                 if (cmd == NetworkEvent.Type.Data)
                 {
                     OnData(stream, i);
 
-                    // 허트빗 업데이트 지속적으로
+                    // update heartbeat time to time
                     ClientsHeatbeatCheck[m_Connections[i].InternalId.ToString()] = Time.time;
                 }
                 // Disconnect
@@ -123,17 +131,22 @@ public class NetworkServer : MonoBehaviour
     }
 
     // C# 클래스를 JSON String 으로 convert해서 message
+    // -> c# class convert to Json String, and convert again to byte[]
     void SendToClient(string message, NetworkConnection c)
     {
         // writer(배달부를 생성)
+        // -> writer is a delivery man
         var writer = m_Driver.BeginSend(NetworkPipeline.Null, c);
-        // Json string을 bytes[]로 convert
+
+        // Convert Json string to byte[]
         NativeArray<byte> bytes = new NativeArray<byte>(Encoding.ASCII.GetBytes(message), Allocator.Temp);
 
         // writer에 우리의 보낼 데이터를 넣어줌.
+        // -> give data to writer
         writer.WriteBytes(bytes);
 
         //writer에게 전송을 명령
+        // -> let writer to send data
         m_Driver.EndSend(writer);
     }
 
@@ -149,32 +162,41 @@ public class NetworkServer : MonoBehaviour
 
         /////////////////////////////// Send internal id to new clients //////////////////////////////////////
 
-        // 우리가 보낼 c# 데이터
+        // 우리가 보낼 c# 데이터 --> the data what we want to send (c# class)
         PlayerUpdateMsg internalID = new PlayerUpdateMsg();
-        // 이게 어떠한 메세지인지 표시
+
+        // 이게 어떠한 메세지인지 표시 -->  mark the data let clients know about this.
         internalID.cmd = Commands.INTERNAL_ID;
+
         // 뭘 보낼지 채우기 --> 연결다리에 InternalId가 int라서 string 으로
+        // -> fill the data (in the connection, InternalId is int type. so need to convert to string)
         internalID.player.id = c.InternalId.ToString();
+
         // 커넥션이 제대로 되는지 체크
+        // check if connection is good
         Assert.IsTrue(c.IsCreated);
-        // 보내기
+
+        // Send data to new clients
         SendToClient(JsonUtility.ToJson(internalID), c);
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////
 
         /////////////////////////////// Old Clients info to new clients //////////////////////////////////////
-        // 우리가 보낼 c# 데이터
+
+        // 우리가 보낼 c# 데이터 --> the data what we want to send (c# class)
         ServerUpdateMsg oldClientsInfo = new ServerUpdateMsg();
-        // 이게 어떠한 메세지인지 표시
+
+        // 이게 어떠한 메세지인지 표시 -->  mark the data let clients know about this.
         oldClientsInfo.cmd = Commands.OLD_CLIENTS_INFO;
-        // dictionary for loop 돌기
+
+        // dictionary for loop
         foreach (KeyValuePair<string, NetworkObjects.NetworkPlayer> dic in allClients)
         {
-            // 리스트에 값 추가
+            // add values
             oldClientsInfo.players.Add(dic.Value);
         }
 
-        // 보내기
+        // send to new clients
         SendToClient(JsonUtility.ToJson(oldClientsInfo), c);
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,7 +206,7 @@ public class NetworkServer : MonoBehaviour
         newClientsInfo.cmd = Commands.NEW_CLIENTS_INFO;
         newClientsInfo.player.id = c.InternalId.ToString();
 
-        // New clients info 를 old clients 에게 전달
+        // send New clients info to old clients 
         for (int i = 0; i < m_Connections.Length; ++i)
         {
             SendToClient(JsonUtility.ToJson(newClientsInfo), m_Connections[i]);
@@ -196,10 +218,11 @@ public class NetworkServer : MonoBehaviour
 
 
 
-        // 리스트에 add
+        // add to connection list
         m_Connections.Add(c);
 
         // 커넥션에 들어있는 정보를 allClients dictionary에 추가
+        // -> add info in the connection to allClients dictionary
         allClients[c.InternalId.ToString()] = new NetworkObjects.NetworkPlayer();
         allClients[c.InternalId.ToString()].id = c.InternalId.ToString();
 
@@ -212,6 +235,9 @@ public class NetworkServer : MonoBehaviour
 
     void OnData(DataStreamReader stream, int i)
     {
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Data from client to server: (ReadBytes)->bytes-> (GetString)->JSON string -> (FromJson)->c# class
+
         // 바이트 배열을 생성
         NativeArray<byte> bytes = new NativeArray<byte>(stream.Length, Allocator.Temp);
         // 커넥션에서 받아온 데이터들을 담기
@@ -221,6 +247,9 @@ public class NetworkServer : MonoBehaviour
         // Json string -> c# class로 convert
         NetworkHeader header = JsonUtility.FromJson<NetworkHeader>(recMsg);
 
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        // messages
         switch (header.cmd)
         {
             case Commands.HANDSHAKE:
@@ -265,14 +294,13 @@ public class NetworkServer : MonoBehaviour
     {
         ServerUpdateMsg oc = new ServerUpdateMsg();
 
-        // 기존 정보를 가져와서 oc에 넣어줌
+        // get info from allClients and add to oc
         foreach (KeyValuePair<string, NetworkObjects.NetworkPlayer> dic in allClients)
         {
-            // 리스트에 값 추가
             oc.players.Add(dic.Value);
         }
 
-        // 보내기
+        // send
         for (int i = 0; i < m_Connections.Length; ++i)
         {
             SendToClient(JsonUtility.ToJson(oc), m_Connections[i]);
@@ -282,7 +310,7 @@ public class NetworkServer : MonoBehaviour
     // heart beat
     void HeatbeatCheck()
     {
-        // List<String> 지워야할 아이디를 가진 리스트
+        // List<String> - thie list of that contains IDs which need to be deleted.
         List<string> deleteID = new List<string>();
         foreach (KeyValuePair<string, float> dic in ClientsHeatbeatCheck)
         {
@@ -293,10 +321,10 @@ public class NetworkServer : MonoBehaviour
             }
         }
 
-        // 지울 녀석이 0이 아니면
+        // if there is data that need to be removed
         if (deleteID.Count != 0)
         {
-            // 지운다
+            // delete
             for (int i = 0; i < deleteID.Count; ++i)
             {
                 allClients.Remove(deleteID[i]);
@@ -304,16 +332,17 @@ public class NetworkServer : MonoBehaviour
 
             }
 
-            // c# 클래스
+            // make c# class to give to clients
             DeleteMsg dm = new DeleteMsg();
             dm.deleteID = deleteID;
 
-            // 클라한테 뿌리기
+            // send to clients
             for (int i = 0; i < m_Connections.Length; ++i)
             {
-                // disconnetcted 된 녀석은 스킵
+                // but we dont need to send already disconnected values.
                 if (deleteID.Contains(m_Connections[i].InternalId.ToString()))
                 {
+                    // skip
                     continue;
                 }
 

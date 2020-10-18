@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace NetworkMessages
 {
+    // messages let server and clients know what motion need to act
     public enum Commands{
         PLAYER_UPDATE,
         SERVER_UPDATE,
@@ -28,7 +29,8 @@ namespace NetworkMessages
             player = new NetworkObjects.NetworkPlayer();
         }
     }
-    
+
+    // PlayerUpdateMsg - This is gonna be me
     [System.Serializable]
     public class PlayerUpdateMsg:NetworkHeader{
         // plater - id, color, pos
@@ -46,6 +48,8 @@ namespace NetworkMessages
             myInput = new Input();
         }
     }
+
+    // PlayerUpdateMsg - This is gonna be other clients
     [System.Serializable]
     public class  ServerUpdateMsg:NetworkHeader{
         public List<NetworkObjects.NetworkPlayer> players;
@@ -55,6 +59,7 @@ namespace NetworkMessages
         }
     }
 
+    // DeleteMsg - delete message that let server and clinets know internal IDs
     [System.Serializable]
     public class DeleteMsg : NetworkHeader
     {

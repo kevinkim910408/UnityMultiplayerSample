@@ -28,15 +28,17 @@ public class NetworkClient : MonoBehaviour
     
     void Start ()
     {
-        //serverIP = "3.20.240.191"; // server
-        serverIP = "127.0.0.1"; //local
+        serverIP = "3.20.240.191"; // server - aws 
+        //serverIP = "127.0.0.1"; //local
         m_Driver = NetworkDriver.Create();
 
         // 서버에 연결되는 다리(이걸 이용해서 서버에 메세지를 보냄)
+        // -> the bridge. use this to send message to server
         m_Connection = default(NetworkConnection);
         var endpoint = NetworkEndPoint.Parse(serverIP,serverPort);
 
         // 서버의 커넥션하고는 다른 커넥션. ( 총 2개의 다리가 있다고 생각 - 서버, 클라 각각 한개씩)
+        // so there are two connecetions. one from server to clients. the other one from clients to server.
         m_Connection = m_Driver.Connect(endpoint);
     }
     void Update()
@@ -50,7 +52,9 @@ public class NetworkClient : MonoBehaviour
 
         DataStreamReader stream;
         NetworkEvent.Type cmd;
-        // PopEvent - 서버쪽에서 무슨 데이터를 줬는지 검사.
+
+        // PopEvent - check what data gets from server.
+
         cmd = m_Connection.PopEvent(m_Driver, out stream);
         while (cmd != NetworkEvent.Type.Empty)
         {
@@ -58,7 +62,7 @@ public class NetworkClient : MonoBehaviour
             {
                 OnConnect();
             }
-            //서버가 진짜 데이터를보낸거
+            // data from server
             else if (cmd == NetworkEvent.Type.Data)
             {
                 OnData(stream);
@@ -120,6 +124,7 @@ public class NetworkClient : MonoBehaviour
                     Debug.Log(suMsg.players[i].id + "  " + suMsg.players[i].cubPos);
                }
                 // server가 보내주는 모든 정보 받기, 현교 데이터만 받아와서 내 업데이트에 적용
+                // -> get all data from server, and only update other clients(updates)' data to my update 
                 UpdateOldClientsInfo(suMsg);
 
                 break;
@@ -194,14 +199,17 @@ public class NetworkClient : MonoBehaviour
         listOfOldClients[newClientsDatas.player.id] = nc;
     }
 
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    /// Data from server to client:   c# class -> (ToJson) -> JSON string -> (GetBytes) -> bytes -> (WriteBytes)
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////
     public void UpdateClientsPosition()
     {
-        // c# 클래스
+        // c# class
         PlayerUpdateMsg data = new PlayerUpdateMsg();
         data.player.id = id;
         data.player.cubPos = transformPosition.position;
 
-        // json string
+        // send json string
         SendToServer(JsonUtility.ToJson(data));
     }
 
@@ -211,11 +219,11 @@ public class NetworkClient : MonoBehaviour
         {
             if (listOfOldClients.ContainsKey(data.players[i].id))
             {
-                // 현교 데이터 업데이트
+                // other client's data
                 listOfOldClients[data.players[i].id].transform.position = data.players[i].cubPos;
             }
 
-            // 내 데이터는 배제
+            // my data.
             else
             {
                 
