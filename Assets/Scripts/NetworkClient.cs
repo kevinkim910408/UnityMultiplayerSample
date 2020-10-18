@@ -148,6 +148,13 @@ public class NetworkClient : MonoBehaviour
                 SpawnNewClients(newClientsInfo);
                 break;
 
+            case Commands.DISCONNECTED:
+                DeleteMsg dm = JsonUtility.FromJson<DeleteMsg>(recMsg);
+                // destroy method
+                DestoryDisconnected(dm);
+
+                break;
+
             default:
                 Debug.Log("Unrecognized message received!");
                 break;
@@ -212,6 +219,18 @@ public class NetworkClient : MonoBehaviour
             else
             {
                 
+            }
+        }
+    }
+
+    public void DestoryDisconnected(DeleteMsg data)
+    {
+        for(int i = 0; i < data.deleteID.Count; ++i)
+        {
+            if (listOfOldClients.ContainsKey(data.deleteID[i]))
+            {
+                Destroy(listOfOldClients[data.deleteID[i]]);
+                listOfOldClients.Remove(data.deleteID[i]);
             }
         }
     }

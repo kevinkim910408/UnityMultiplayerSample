@@ -5,6 +5,7 @@ using Unity.Networking.Transport;
 using NetworkMessages;
 using System;
 using System.Text;
+using System.Collections.Generic;
 
 public class NetworkServer : MonoBehaviour
 {
@@ -12,8 +13,21 @@ public class NetworkServer : MonoBehaviour
     public ushort serverPort;
     private NativeList<NetworkConnection> m_Connections;
 
-    void Start ()
+    // string - internal id
+    private Dictionary<string, NetworkObjects.NetworkPlayer> allClients = new Dictionary<string, NetworkObjects.NetworkPlayer>();
+
+    // float - time, string - internal id
+    private Dictionary<string, float> ClientsHeatbeatCheck = new Dictionary<string, float>();
+
+    float lastTimeSendAllPlayerInfo;
+    float intervalTimeSendingAllPlayerInfo;
+
+    void Start()
     {
+        lastTimeSendAllPlayerInfo = Time.time;
+        intervalTimeSendingAllPlayerInfo = 0.03f;
+
+
         // Driver = Socket 같은거
         m_Driver = NetworkDriver.Create();
 
@@ -82,6 +96,9 @@ public class NetworkServer : MonoBehaviour
                 if (cmd == NetworkEvent.Type.Data)
                 {
                     OnData(stream, i);
+
+                    // 허트빗 업데이트 지속적으로
+                    ClientsHeatbeatCheck[m_Connections[i].InternalId.ToString()] = Time.time;
                 }
                 // Disconnect
                 else if (cmd == NetworkEvent.Type.Disconnect)
@@ -92,6 +109,17 @@ public class NetworkServer : MonoBehaviour
                 cmd = m_Driver.PopEventForConnection(m_Connections[i], out stream);
             }
         }
+
+        //Every interval, send all info to all clients
+        if (Time.time - lastTimeSendAllPlayerInfo >= intervalTimeSendingAllPlayerInfo)
+        {
+            lastTimeSendAllPlayerInfo = Time.time;
+
+            SendInfoToAllClients();
+            //Debug.Log("Send all player info to client");
+        }
+
+        HeatbeatCheck();
     }
 
     // C# 클래스를 JSON String 으로 convert해서 message
@@ -100,7 +128,7 @@ public class NetworkServer : MonoBehaviour
         // writer(배달부를 생성)
         var writer = m_Driver.BeginSend(NetworkPipeline.Null, c);
         // Json string을 bytes[]로 convert
-        NativeArray<byte> bytes = new NativeArray<byte>(Encoding.ASCII.GetBytes(message),Allocator.Temp);
+        NativeArray<byte> bytes = new NativeArray<byte>(Encoding.ASCII.GetBytes(message), Allocator.Temp);
 
         // writer에 우리의 보낼 데이터를 넣어줌.
         writer.WriteBytes(bytes);
@@ -117,12 +145,10 @@ public class NetworkServer : MonoBehaviour
 
     void OnConnect(NetworkConnection c)
     {
-        // 리스트에 add
-        m_Connections.Add(c);
         Debug.Log("Accepted a connection");
 
         /////////////////////////////// Send internal id to new clients //////////////////////////////////////
-        
+
         // 우리가 보낼 c# 데이터
         PlayerUpdateMsg internalID = new PlayerUpdateMsg();
         // 이게 어떠한 메세지인지 표시
@@ -136,6 +162,46 @@ public class NetworkServer : MonoBehaviour
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////
 
+        /////////////////////////////// Old Clients info to new clients //////////////////////////////////////
+        // 우리가 보낼 c# 데이터
+        ServerUpdateMsg oldClientsInfo = new ServerUpdateMsg();
+        // 이게 어떠한 메세지인지 표시
+        oldClientsInfo.cmd = Commands.OLD_CLIENTS_INFO;
+        // dictionary for loop 돌기
+        foreach (KeyValuePair<string, NetworkObjects.NetworkPlayer> dic in allClients)
+        {
+            // 리스트에 값 추가
+            oldClientsInfo.players.Add(dic.Value);
+        }
+
+        // 보내기
+        SendToClient(JsonUtility.ToJson(oldClientsInfo), c);
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        /////////////////////////////// New Clients info to old clients //////////////////////////////////////
+        PlayerUpdateMsg newClientsInfo = new PlayerUpdateMsg();
+        newClientsInfo.cmd = Commands.NEW_CLIENTS_INFO;
+        newClientsInfo.player.id = c.InternalId.ToString();
+
+        // New clients info 를 old clients 에게 전달
+        for (int i = 0; i < m_Connections.Length; ++i)
+        {
+            SendToClient(JsonUtility.ToJson(newClientsInfo), m_Connections[i]);
+        }
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+        // 리스트에 add
+        m_Connections.Add(c);
+
+        // 커넥션에 들어있는 정보를 allClients dictionary에 추가
+        allClients[c.InternalId.ToString()] = new NetworkObjects.NetworkPlayer();
+        allClients[c.InternalId.ToString()].id = c.InternalId.ToString();
 
 
         //// Example to send a handshake message:
@@ -147,7 +213,7 @@ public class NetworkServer : MonoBehaviour
     void OnData(DataStreamReader stream, int i)
     {
         // 바이트 배열을 생성
-        NativeArray<byte> bytes = new NativeArray<byte>(stream.Length,Allocator.Temp);
+        NativeArray<byte> bytes = new NativeArray<byte>(stream.Length, Allocator.Temp);
         // 커넥션에서 받아온 데이터들을 담기
         stream.ReadBytes(bytes);
         // 데이터를 array로 convert -> Json string으로 convert
@@ -155,7 +221,7 @@ public class NetworkServer : MonoBehaviour
         // Json string -> c# class로 convert
         NetworkHeader header = JsonUtility.FromJson<NetworkHeader>(recMsg);
 
-        switch(header.cmd)
+        switch (header.cmd)
         {
             case Commands.HANDSHAKE:
                 HandshakeMsg hsMsg = JsonUtility.FromJson<HandshakeMsg>(recMsg);
@@ -164,7 +230,12 @@ public class NetworkServer : MonoBehaviour
 
             case Commands.PLAYER_UPDATE:
                 PlayerUpdateMsg puMsg = JsonUtility.FromJson<PlayerUpdateMsg>(recMsg);
-                Debug.Log("Player update message received!");
+                //Debug.Log("Player update message received!");
+                //Debug.Log(puMsg.player.cubPos);
+
+                // update clients
+                UpdateClient(puMsg);
+
                 break;
 
             case Commands.SERVER_UPDATE:
@@ -184,5 +255,71 @@ public class NetworkServer : MonoBehaviour
         m_Connections[i] = default(NetworkConnection);
     }
 
-    
+    void UpdateClient(PlayerUpdateMsg data)
+    {
+        if (allClients.ContainsKey(data.player.id))
+            allClients[data.player.id].cubPos = data.player.cubPos;
+    }
+
+    void SendInfoToAllClients()
+    {
+        ServerUpdateMsg oc = new ServerUpdateMsg();
+
+        // 기존 정보를 가져와서 oc에 넣어줌
+        foreach (KeyValuePair<string, NetworkObjects.NetworkPlayer> dic in allClients)
+        {
+            // 리스트에 값 추가
+            oc.players.Add(dic.Value);
+        }
+
+        // 보내기
+        for (int i = 0; i < m_Connections.Length; ++i)
+        {
+            SendToClient(JsonUtility.ToJson(oc), m_Connections[i]);
+        }
+    }
+
+    // heart beat
+    void HeatbeatCheck()
+    {
+        // List<String> 지워야할 아이디를 가진 리스트
+        List<string> deleteID = new List<string>();
+        foreach (KeyValuePair<string, float> dic in ClientsHeatbeatCheck)
+        {
+            if (Time.time - dic.Value >= 5.0f)
+            {
+                Debug.Log(dic.Key.ToString() + " Disconnected!");
+                deleteID.Add(dic.Key);
+            }
+        }
+
+        // 지울 녀석이 0이 아니면
+        if (deleteID.Count != 0)
+        {
+            // 지운다
+            for (int i = 0; i < deleteID.Count; ++i)
+            {
+                allClients.Remove(deleteID[i]);
+                ClientsHeatbeatCheck.Remove(deleteID[i]);
+
+            }
+
+            // c# 클래스
+            DeleteMsg dm = new DeleteMsg();
+            dm.deleteID = deleteID;
+
+            // 클라한테 뿌리기
+            for (int i = 0; i < m_Connections.Length; ++i)
+            {
+                // disconnetcted 된 녀석은 스킵
+                if (deleteID.Contains(m_Connections[i].InternalId.ToString()))
+                {
+                    continue;
+                }
+
+                SendToClient(JsonUtility.ToJson(dm), m_Connections[i]);
+            }
+
+        }
+    }
 }

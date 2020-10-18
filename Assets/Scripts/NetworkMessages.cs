@@ -12,6 +12,7 @@ namespace NetworkMessages
         INTERNAL_ID,
         OLD_CLIENTS_INFO,
         NEW_CLIENTS_INFO,
+        DISCONNECTED,
     }
 
     [System.Serializable]
@@ -53,7 +54,19 @@ namespace NetworkMessages
             players = new List<NetworkObjects.NetworkPlayer>();
         }
     }
-} 
+
+    [System.Serializable]
+    public class DeleteMsg : NetworkHeader
+    {
+        public List<string> deleteID;
+        public DeleteMsg()
+        {      // Constructor
+            cmd = Commands.DISCONNECTED;
+            deleteID = new List<string>();
+        }
+    }
+
+}
 
 namespace NetworkObjects
 {
